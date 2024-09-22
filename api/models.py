@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
+
 # Create your models here.
 
 class User(AbstractUser):
@@ -15,6 +16,7 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
 
 class Event(models.Model):
     CATEGORY_CHOICES = (
@@ -38,6 +40,7 @@ class Event(models.Model):
     def __str__(self):
         return self.title
 
+
 class Booking(models.Model):
     STATUS_CHOICES = (
         ('booked', 'Booked'),
@@ -52,6 +55,7 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.event.title}"
+
 
 class Payment(models.Model):
     STATUS_CHOICES = (

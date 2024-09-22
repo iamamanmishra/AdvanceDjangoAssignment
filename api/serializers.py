@@ -4,6 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(
         required=True,
@@ -28,6 +29,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+
 class LoginSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -36,6 +38,7 @@ class LoginSerializer(TokenObtainPairSerializer):
         # Add custom claims
         token['role'] = user.role
         return token
+
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
@@ -52,16 +55,19 @@ class LogoutSerializer(serializers.Serializer):
         except Exception as e:
             self.fail('bad_token')
 
+
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = '__all__'
         read_only_fields = ['created_by', 'available_tickets']
 
+
 class EventListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = '__all__'
+
 
 class BookingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -84,9 +90,64 @@ class BookingSerializer(serializers.ModelSerializer):
         booking = Booking.objects.create(**validated_data)
         return booking
 
+
 class BookingDetailSerializer(serializers.ModelSerializer):
     event = EventListSerializer(read_only=True)
 
     class Meta:
         model = Booking
         fields = ['id', 'event', 'number_of_tickets', 'booking_date', 'status']
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ['id', 'booking', 'payment_method', 'amount', 'payment_date', 'status']
+        read_only_fields = ['payment_date', 'status']
+
+    def validate(self, attrs):
+        booking = attrs.get('booking')
+        if booking.status == 'cancelled':
+            raise serializers.ValidationError("Cannot make payment for a cancelled booking.")
+        if hasattr(booking, 'payment'):
+            raise serializers.ValidationError("Payment already made for this booking.")
+        return attrs
+
+    def create(self, validated_data):
+        payment = Payment.objects.create(**validated_data)
+        return payment
+
+
+class RevertPaymentSerializer(serializers.Serializer):
+    booking_id = serializers.IntegerField()
+    reason = serializers.CharField()
+
+    def validate_booking_id(self, value):
+        try:
+            booking = Booking.objects.get(id=value)
+            return booking
+        except Booking.DoesNotExist:
+            raise serializers.ValidationError("Booking does not exist.")
+
+    def save(self, **kwargs):
+        booking = self.validated_data['booking_id']
+        reason = self.validated_data['reason']
+
+        if not hasattr(booking, 'payment'):
+            raise serializers.ValidationError("No payment found for this booking.")
+
+        payment = booking.payment
+        payment.status = 'reverted'
+        payment.save()
+
+        # Update booking status
+        booking.status = 'cancelled'
+        booking.save()
+
+        # Update available tickets
+        event = booking.event
+        event.available_tickets += booking.number_of_tickets
+        event.save()
+
+        # Send Email Notification (optional)
+        # Implement email sending here
