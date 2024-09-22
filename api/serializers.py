@@ -83,3 +83,10 @@ class BookingSerializer(serializers.ModelSerializer):
         event.save()
         booking = Booking.objects.create(**validated_data)
         return booking
+
+class BookingDetailSerializer(serializers.ModelSerializer):
+    event = EventListSerializer(read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = ['id', 'event', 'number_of_tickets', 'booking_date', 'status']

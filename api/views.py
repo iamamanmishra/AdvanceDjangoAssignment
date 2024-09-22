@@ -7,6 +7,7 @@ from rest_framework import generics,status, permissions, filters
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
+from django.shortcuts import get_object_or_404
 
 # Create your views here.
 
@@ -55,3 +56,37 @@ class BookTicketView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+class MyBookingsView(generics.ListAPIView):
+    serializer_class = BookingDetailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Booking.objects.filter(user=self.request.user)
+
+class CancelBookingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, booking_id):
+        booking = get_object_or_404(Booking, id=booking_id, user=request.user)
+        if booking.status == 'cancelled':
+            return Response({"detail": "Booking already cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        booking.status = 'cancelled'
+        booking.save()
+
+        # Revert payment
+        if hasattr(booking, 'payment'):
+            payment = booking.payment
+            payment.status = 'reverted'
+            payment.save()
+
+        # Update available tickets
+        event = booking.event
+        event.available_tickets += booking.number_of_tickets
+        event.save()
+
+        # Send Email Notification (optional)
+        # Implement email sending here
+
+        return Response({"detail": "Booking cancelled and payment reverted."}, status=status.HTTP_200_OK)
