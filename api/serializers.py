@@ -51,3 +51,35 @@ class LogoutSerializer(serializers.Serializer):
             token.blacklist()
         except Exception as e:
             self.fail('bad_token')
+
+class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__'
+        read_only_fields = ['created_by', 'available_tickets']
+
+class EventListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__'
+
+class BookingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Booking
+        fields = ['id', 'user', 'event', 'number_of_tickets', 'booking_date', 'status']
+        read_only_fields = ['user', 'booking_date', 'status']
+
+    def validate(self, attrs):
+        event = attrs.get('event')
+        number_of_tickets = attrs.get('number_of_tickets')
+        if event.available_tickets < number_of_tickets:
+            raise serializers.ValidationError("Not enough tickets available.")
+        return attrs
+
+    def create(self, validated_data):
+        event = validated_data['event']
+        number_of_tickets = validated_data['number_of_tickets']
+        event.available_tickets -= number_of_tickets
+        event.save()
+        booking = Booking.objects.create(**validated_data)
+        return booking
